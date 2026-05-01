@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  html { font-size: 16px; }
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  img { @apply max-w-full block; }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-brand-500 text-white font-bold rounded-xl px-6 py-3 
+           hover:bg-brand-600 active:scale-[0.99] disabled:bg-gray-300 
+           disabled:cursor-not-allowed transition-all duration-150 cursor-pointer;
+  }
+  .btn-secondary {
+    @apply border border-brand-500 text-brand-500 font-semibold rounded-xl px-6 py-3
+           hover:bg-brand-50 transition-all duration-150 cursor-pointer;
+  }
+  .card {
+    @apply bg-white border border-gray-200 rounded-2xl shadow-sm;
+  }
+  .badge {
+    @apply inline-flex items-center px-3 py-0.5 rounded-full text-xs font-mono 
+           font-semibold tracking-wider uppercase;
+  }
+  .badge-green {
+    @apply badge bg-brand-50 text-brand-500;
+  }
+  .badge-amber {
+    @apply badge bg-amber-50 text-amber-700;
+  }
+  .chip {
+    @apply px-4 py-1.5 rounded-full border text-sm cursor-pointer transition-all duration-150
+           border-gray-200 bg-gray-50 text-gray-500 hover:border-brand-500;
+  }
+  .chip-active {
+    @apply chip border-brand-500 bg-brand-50 text-brand-600 font-semibold;
+  }
+  .section-label {
+    @apply text-[10px] tracking-[3px] uppercase font-mono text-brand-500 mb-1;
+  }
+  .spinner {
+    @apply w-10 h-10 rounded-full border-4 border-gray-200 border-t-brand-500 animate-spin;
+  }
+}
