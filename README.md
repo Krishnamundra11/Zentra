@@ -1,4 +1,4 @@
-# 🌍 TravelLens
+# 🌍 Zetra
 
 **AI-powered tourist place recognition and travel planning platform.**
 
@@ -56,7 +56,7 @@ Upload a photo of any tourist destination → the system identifies it → an AI
 ## Project Structure
 
 ```
-travellens/
+Zetra/
 │
 ├── backend/
 │   ├── app/
@@ -182,9 +182,9 @@ sudo -u postgres psql
 
 Inside the psql shell:
 ```sql
-CREATE DATABASE travellens;
-CREATE USER travellens_user WITH PASSWORD 'yourpassword';
-GRANT ALL PRIVILEGES ON DATABASE travellens TO travellens_user;
+CREATE DATABASE Zetra;
+CREATE USER Zetra_user WITH PASSWORD 'yourpassword';
+GRANT ALL PRIVILEGES ON DATABASE Zetra TO Zetra_user;
 \q
 ```
 
@@ -196,7 +196,7 @@ brew install pgvector
 ```
 Then in psql:
 ```sql
-\c travellens
+\c Zetra
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
@@ -206,7 +206,7 @@ sudo apt install postgresql-15-pgvector
 ```
 Then:
 ```sql
-\c travellens
+\c Zetra
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
@@ -248,7 +248,7 @@ redis-cli ping
 ### 1. Create and activate a virtual environment
 
 ```bash
-cd travellens/backend
+cd Zetra/backend
 
 # Create venv
 python -m venv venv
@@ -283,7 +283,7 @@ cp .env.example .env
 Edit `.env` with your actual values:
 
 ```env
-DATABASE_URL=postgresql+asyncpg://travellens_user:yourpassword@localhost:5432/travellens
+DATABASE_URL=postgresql+asyncpg://Zetra_user:yourpassword@localhost:5432/Zetra
 REDIS_URL=redis://localhost:6379/0
 ANTHROPIC_API_KEY=sk-ant-your-key-here
 GOOGLE_PLACES_API_KEY=your-google-places-key
@@ -315,7 +315,7 @@ API docs available at: http://localhost:8000/docs
 ```bash
 # Open a new terminal, cd into backend/, activate venv
 
-cd travellens/backend
+cd Zetra/backend
 source venv/bin/activate      # or venv\Scripts\activate on Windows
 
 celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
@@ -333,7 +333,7 @@ celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
 ### 1. Install Node dependencies
 
 ```bash
-cd travellens/frontend
+cd Zetra/frontend
 npm install
 ```
 
@@ -379,7 +379,7 @@ The CV pipeline requires known tourist places with pre-computed CLIP embeddings
 in the `place_embeddings` table. Run the seed script once after migrations:
 
 ```bash
-cd travellens/backend
+cd Zetra/backend
 source venv/bin/activate
 python seed_places.py
 ```

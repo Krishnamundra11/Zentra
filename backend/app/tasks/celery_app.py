@@ -3,7 +3,7 @@ from celery import Celery
 from app.config import settings
 
 celery_app = Celery(
-    "travellens",
+    "Zetra",
     broker=settings.redis_url,
     backend=settings.redis_url,
     include=["app.tasks.cv_tasks", "app.tasks.agent_tasks"],

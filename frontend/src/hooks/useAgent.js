@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef } from "react";
-import { startAgent, getAgentStatus, getItinerary } from "../services/api";
+import { startAgent, getAgentStatus, getItinerary, openProgressSocket } from "../services/api";
 import useStore from "../store/useStore";
 
 export function useAgent() {
-  const { preferences, setAgentTaskId, setItinerary, agentStatus } = useStore();
+  const { preferences, setAgentTaskId, setItinerary, agentStatus, appendWsEvent } = useStore();
   const pollRef = useRef(null);
+  const wsRef = useRef(null);
 
   const launchAgent = useCallback(async (place) => {
     try {
@@ -33,6 +34,12 @@ export function useAgent() {
   useEffect(() => {
     if (!agentTaskId || agentStatus === "completed") return;
 
+    // Open WebSocket for agent progress
+    const ws = openProgressSocket(agentTaskId, (ev) => {
+      appendWsEvent(ev);
+    });
+    wsRef.current = ws;
+
     pollRef.current = setInterval(async () => {
       try {
         const { data: status } = await getAgentStatus(agentTaskId);
@@ -40,13 +47,17 @@ export function useAgent() {
           const { data: plan } = await getItinerary(agentTaskId);
           setItinerary(plan);
           clearInterval(pollRef.current);
+          ws.close();
         }
       } catch {
         // silently retry
       }
     }, 3000);
 
-    return () => clearInterval(pollRef.current);
+    return () => {
+      clearInterval(pollRef.current);
+      ws?.close();
+    };
   }, [agentTaskId, agentStatus]);
 
   return { launchAgent };

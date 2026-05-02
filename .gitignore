@@ -1,2 +1,37 @@
-.env.example
+# Environments
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+env/
+
+# Node/Frontend (Vite/React)
 node_modules/
+dist/
+dist-ssr/
+.eslintcache
+
+# Python/Backend (FastAPI/Celery/Alembic)
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+celerybeat-schedule
+celerybeat.pid
+
+# Databases
+*.db
+*.sqlite3
+
+# Project specific
+uploads/
+backend/uploads/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,5 +1,5 @@
 """
-Agentic Travel Planner — Claude tool-use loop.
+Agentic Travel Planner — Gemini function calling loop.
 
 The agent receives a recognised place + user preferences and autonomously:
   1. Fetches nearby attractions
@@ -15,17 +15,17 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, Awaitable
 
-import anthropic
 import httpx
+import google.generativeai as genai
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-AnthropicClient = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+genai.configure(api_key=settings.gemini_api_key)
 
 
-# ── Tool Definitions (Claude tool_use format) ─────────────────────────────────
+# ── Tool Definitions (Gemini function calling format) ─────────────────────────
 
 TRAVEL_TOOLS = [
     {
@@ -115,6 +115,15 @@ TRAVEL_TOOLS = [
             "required": ["place_name"]
         }
     }
+]
+
+GEMINI_TOOLS = [
+    {
+        "name": t["name"],
+        "description": t["description"],
+        "parameters": t["input_schema"],
+    }
+    for t in TRAVEL_TOOLS
 ]
 
 
@@ -290,8 +299,13 @@ async def run_travel_agent(
     so the WebSocket layer can stream progress to the frontend.
     """
     plan = TravelPlan(place_name=place_name)
+    model = genai.GenerativeModel(
+        model_name=settings.gemini_text_model,
+        tools=[{"function_declarations": GEMINI_TOOLS}],
+        system_instruction=_build_system_prompt(place_name, country, city, prefs),
+    )
     messages: list[dict] = [
-        {"role": "user", "content": _build_system_prompt(place_name, country, city, prefs)}
+        {"role": "user", "parts": [{"text": "Start planning."}]}
     ]
 
     if progress_callback:
@@ -300,36 +314,42 @@ async def run_travel_agent(
     max_iterations = 12   # safety cap
 
     for iteration in range(max_iterations):
-        response = AnthropicClient.messages.create(
-            model="claude-opus-4-5",
-            max_tokens=4096,
-            tools=TRAVEL_TOOLS,
-            messages=messages,
-        )
+        response = model.generate_content(messages)
+        parts = response.candidates[0].content.parts if response.candidates else []
 
-        # Collect assistant message
-        messages.append({"role": "assistant", "content": response.content})
+        model_parts = []
+        function_calls = []
+        for part in parts:
+            if getattr(part, "text", None):
+                model_parts.append({"text": part.text})
+            if getattr(part, "function_call", None):
+                fc = part.function_call
+                function_calls.append(fc)
+                model_parts.append({
+                    "function_call": {
+                        "name": fc.name,
+                        "args": dict(fc.args or {}),
+                    }
+                })
 
-        if response.stop_reason == "end_turn":
-            # Extract final JSON plan from last text block
-            for block in response.content:
-                if hasattr(block, "text"):
-                    plan.raw_agent_output = block.text
-                    try:
-                        idx = block.text.find("{")
-                        end = block.text.rfind("}") + 1
-                        plan.itinerary = json.loads(block.text[idx:end])
-                    except (ValueError, json.JSONDecodeError):
-                        plan.itinerary = {"raw": block.text}
+        if model_parts:
+            messages.append({"role": "model", "parts": model_parts})
+
+        if not function_calls:
+            final_text = response.text or ""
+            plan.raw_agent_output = final_text
+            try:
+                idx = final_text.find("{")
+                end = final_text.rfind("}") + 1
+                plan.itinerary = json.loads(final_text[idx:end])
+            except (ValueError, json.JSONDecodeError):
+                plan.itinerary = {"raw": final_text}
             break
 
-        # Execute all tool calls
         tool_results = []
-        for block in response.content:
-            if block.type != "tool_use":
-                continue
-            tool_name = block.name
-            tool_input = block.input
+        for fc in function_calls:
+            tool_name = fc.name
+            tool_input = dict(fc.args or {})
 
             if progress_callback:
                 await progress_callback("agent_tool_called", {"tool": tool_name, "input": tool_input})
@@ -352,12 +372,13 @@ async def run_travel_agent(
                 plan.booking_links = result_data
 
             tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": block.id,
-                "content": result_str,
+                "function_response": {
+                    "name": tool_name,
+                    "response": result_data,
+                }
             })
 
-        messages.append({"role": "user", "content": tool_results})
+        messages.append({"role": "user", "parts": tool_results})
 
     if progress_callback:
         await progress_callback("itinerary_ready", {"plan": plan.itinerary})

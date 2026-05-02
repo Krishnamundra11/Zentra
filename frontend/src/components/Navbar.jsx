@@ -15,7 +15,7 @@ export default function Navbar() {
         <Link to="/" className="flex items-center gap-2 group">
           <span className="text-2xl">🌍</span>
           <span className="text-xl font-extrabold tracking-tight text-gray-900 group-hover:text-brand-500 transition-colors">
-            TravelLens
+            Zetra
           </span>
         </Link>
         <div className="flex items-center gap-1">

@@ -40,7 +40,7 @@ class Place(Base):
     lng: Mapped[float | None] = mapped_column(Float)
     description: Mapped[str | None] = mapped_column(Text)
     category: Mapped[str | None] = mapped_column(String(50))
-    metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    place_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
 
     embeddings: Mapped[list["PlaceEmbedding"]] = relationship(back_populates="place")
     itineraries: Mapped[list["Itinerary"]] = relationship(back_populates="place")

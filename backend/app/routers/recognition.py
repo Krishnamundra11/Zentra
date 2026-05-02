@@ -115,11 +115,15 @@ async def websocket_progress(websocket: WebSocket, task_id: str):
                 break
             await asyncio.sleep(0.5)
             # Also relay agent events stored in Redis list
-            events_raw = await get_json(f"events:{task_id}")
-            if events_raw:
-                for ev in events_raw:
-                    await websocket.send_json(ev)
-    except WebSocketDisconnect:
+            from app.utils.cache import get_redis
+            r = await get_redis()
+            while True:
+                ev_raw = await r.lpop(f"events:{task_id}")
+                if not ev_raw:
+                    break
+                await websocket.send_json(json.loads(ev_raw))
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
         pass
     finally:
         _ws_connections.pop(task_id, None)

@@ -3,7 +3,7 @@ Computer Vision Pipeline
   Stage 1: Preprocess image
   Stage 2: CLIP embedding
   Stage 3: pgvector similarity search
-  Stage 4: Claude Vision verification
+    Stage 4: Gemini Vision verification
   Stage 5: Fallback — visually similar places
 """
 from __future__ import annotations
@@ -16,9 +16,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-import anthropic
 import torch
 from PIL import Image
+import google.generativeai as genai
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from transformers import CLIPModel, CLIPProcessor
@@ -27,6 +27,8 @@ from app.config import settings
 from app.models.place import Place, PlaceEmbedding
 
 logger = logging.getLogger(__name__)
+
+genai.configure(api_key=settings.gemini_api_key)
 
 # ── CLIP Model (loaded once at worker startup) ─────────────────────────────────
 _clip_model: Optional[CLIPModel] = None
@@ -102,11 +104,11 @@ async def vector_search(
     sql = text(f"""
         SELECT
             p.id, p.name, p.country, p.city, p.lat, p.lng, p.description,
-            pe.embedding <=> :emb::vector AS distance
+            pe.embedding <=> CAST(:emb AS vector) AS distance
         FROM place_embeddings pe
         JOIN places p ON p.id = pe.place_id
         WHERE 1=1 {exclude_clause}
-        ORDER BY pe.embedding <=> :emb::vector
+        ORDER BY pe.embedding <=> CAST(:emb AS vector)
         LIMIT :k
     """)
     rows = (await db.execute(sql, {"emb": embedding_str, "k": top_k})).mappings().all()
@@ -126,17 +128,27 @@ async def vector_search(
     ]
 
 
-async def claude_verify(
+def _extract_json_block(text: str) -> dict | None:
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end < start:
+        return None
+    try:
+        return json.loads(text[start:end + 1])
+    except json.JSONDecodeError:
+        return None
+
+
+async def gemini_verify(
     image_bytes: bytes,
     candidate: CandidatePlace,
 ) -> tuple[float, str]:
     """
-    Ask Claude Vision to verify whether the image matches the candidate place.
+    Ask Gemini Vision to verify whether the image matches the candidate place.
     Returns (confidence: 0-1, description: str).
     """
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    import base64
-    b64 = base64.standard_b64encode(image_bytes).decode()
+    model = genai.GenerativeModel(settings.gemini_vision_model)
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
     prompt = f"""You are a travel expert and landmark identifier.
 
@@ -156,26 +168,13 @@ Respond ONLY as valid JSON in this exact format:
   "description": "A daytime shot of the Eiffel Tower seen from Trocadéro gardens."
 }}"""
 
-    response = client.messages.create(
-        model="claude-opus-4-5",
-        max_tokens=512,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}},
-                    {"type": "text", "text": prompt},
-                ],
-            }
-        ],
-    )
-    try:
-        data = json.loads(response.content[0].text)
-        confidence = float(data.get("confidence", 0.0)) if data.get("is_match") else 0.0
-        description = data.get("description", "")
-        return confidence, description
-    except (json.JSONDecodeError, KeyError, IndexError):
+    response = model.generate_content([prompt, img])
+    data = _extract_json_block(response.text or "")
+    if not data:
         return 0.0, ""
+    confidence = float(data.get("confidence", 0.0)) if data.get("is_match") else 0.0
+    description = data.get("description", "")
+    return confidence, description
 
 
 async def run_cv_pipeline(
@@ -200,12 +199,12 @@ async def run_cv_pipeline(
     best = candidates[0]
     logger.info("Best candidate: %s (distance=%.4f)", best.name, best.distance)
 
-    # Stage 4: Claude Vision verification (only for plausible matches)
+    # Stage 4: Gemini Vision verification (only for plausible matches)
     if best.distance < settings.cv_likely_match_threshold:
-        confidence, description = await claude_verify(image_bytes, best)
-        logger.info("Claude confidence: %.2f", confidence)
+        confidence, description = await gemini_verify(image_bytes, best)
+        logger.info("LLM confidence: %.2f", confidence)
 
-        if confidence >= settings.claude_confidence_threshold:
+        if confidence >= settings.llm_confidence_threshold:
             return RecognitionResult(
                 status="matched",
                 place=best,

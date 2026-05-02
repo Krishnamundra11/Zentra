@@ -1,5 +1,5 @@
 """
-TravelLens — FastAPI Application Entry Point
+Zetra — FastAPI Application Entry Point
 """
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -18,7 +18,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="TravelLens API",
+    title="Zetra API",
     description="AI-powered tourist place recognition and travel planning",
     version="1.0.0",
     lifespan=lifespan,
@@ -40,4 +40,4 @@ app.include_router(recommendations.router, prefix="/recommend",    tags=["recomm
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "travellens-api"}
+    return {"status": "ok", "service": "Zetra-api"}
